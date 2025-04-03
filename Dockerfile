@@ -1,16 +1,25 @@
-#FROM quay.io/skopeo/stable:v1.2.0 AS skopeo
-#FROM gcr.io/distroless/base-debian10
-#FROM debian:10
-#COPY --from=skopeo /usr/bin/skopeo /skopeo
+FROM golang:1.22 AS builder
+
+
+WORKDIR /app
+COPY . .
+RUN apt update && apt-get install libbtrfs-dev -y
+RUN go mod download
+RUN go mod tidy
+RUN GOARCH=amd64 CGO_ENABLED=0 go build -o k8s-image-swapper
 
 # TODO: Using alpine for now due to easier installation of skopeo
 #       Will use distroless after incorporating skopeo into the webhook directly
 FROM alpine:3.21.2
-RUN ["apk", "add", "--no-cache", "--repository=http://dl-cdn.alpinelinux.org/alpine/edge/community", "skopeo>=1.2.0"]
+RUN ["apk", "add", "--no-cache", "--repository=http://dl-cdn.alpinelinux.org/alpine/edge/community", "skopeo>=1.2.0", "file"]
+RUN mkdir /app
+COPY --from=builder /app/k8s-image-swapper /app/k8s-image-swapper
+RUN ls -latr /app/*
+RUN file /app/k8s-image-swapper
 
-COPY k8s-image-swapper /
+RUN chmod +x /app/k8s-image-swapper
 
-ENTRYPOINT ["/k8s-image-swapper"]
+ENTRYPOINT ["/app/k8s-image-swapper"]
 
 ARG BUILD_DATE
 ARG VCS_REF

@@ -240,6 +240,14 @@ func (e *ECRClient) PutImage() error {
 	panic("implement me")
 }
 
+// ImageExists checks whether the referenced image already exists in the target
+// registry. It uses `skopeo inspect --raw`, which returns the raw manifest (or
+// manifest list) for the tag WITHOUT resolving it to a single platform. This is
+// important because the swapper process may run on a different architecture than
+// the images it mirrors (e.g. an amd64 swapper mirroring arm64-only images).
+// Without --raw, skopeo would try to resolve the manifest for the swapper's own
+// architecture and fail for images that don't publish that arch, causing the
+// swapper to incorrectly conclude the image is missing and skip swapping.
 func (e *ECRClient) ImageExists(ctx context.Context, imageRef ctypes.ImageReference) bool {
 	ref := imageRef.DockerReference().String()
 	if _, found := e.cache.Get(ref); found {
@@ -250,6 +258,7 @@ func (e *ECRClient) ImageExists(ctx context.Context, imageRef ctypes.ImageRefere
 	app := "skopeo"
 	args := []string{
 		"inspect",
+		"--raw",
 		"--retry-times", "3",
 		"docker://" + ref,
 		"--creds", e.Credentials(),

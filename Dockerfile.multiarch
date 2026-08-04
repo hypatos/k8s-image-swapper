@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1
+# Multi-arch build for the hypatosai/k8s-image-swapper image.
+#
+# Unlike the release Dockerfile (which COPYs a pre-built binary produced by
+# GoReleaser), this Dockerfile compiles the binary for the *target* platform.
+# That lets a single `docker buildx build --platform linux/amd64,linux/arm64`
+# produce a correct manifest list, so the swapper can run on both amd64 and
+# arm64 (Graviton) nodes. See `make docker-multiarch`.
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS build
+WORKDIR /src
+RUN apk add --no-cache git
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o /out/k8s-image-swapper .
+
+FROM alpine:3.20.3
+RUN ["apk", "add", "--no-cache", "--repository=http://dl-cdn.alpinelinux.org/alpine/edge/community", "skopeo>=1.2.0"]
+COPY --from=build /out/k8s-image-swapper /k8s-image-swapper
+ENTRYPOINT ["/k8s-image-swapper"]
+
+ARG BUILD_DATE
+ARG VCS_REF
+LABEL org.opencontainers.image.title="k8s-image-swapper" \
+      org.opencontainers.image.description="Mirror images into your own registry and swap image references automatically." \
+      org.opencontainers.image.source="https://github.com/hypatos/k8s-image-swapper" \
+      org.opencontainers.image.revision="$VCS_REF" \
+      org.opencontainers.image.created="$BUILD_DATE"

@@ -2,6 +2,12 @@ SOURCE_FILES?=./...
 TEST_PATTERN?=.
 TEST_OPTIONS?=
 
+# Multi-arch container image publishing (see Dockerfile.multiarch).
+# Override on the CLI, e.g.: make docker-multiarch IMAGE=hypatosai/k8s-image-swapper TAG=custom3
+IMAGE?=hypatosai/k8s-image-swapper
+TAG?=custom3
+PLATFORMS?=linux/amd64,linux/arm64
+
 .PHONY: help $(MAKECMDGOALS)
 .DEFAULT_GOAL := help
 
@@ -30,3 +36,6 @@ lint: ## Run linters
 
 e2e: ## Run end-to-end tests
 	go test -v -run TestHelmDeployment ./test
+
+docker-multiarch: ## Build & push a multi-arch (amd64+arm64) image (override IMAGE/TAG/PLATFORMS)
+	docker buildx build --platform $(PLATFORMS) -f Dockerfile.multiarch -t $(IMAGE):$(TAG) --push .
